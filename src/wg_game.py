@@ -1,5 +1,5 @@
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum, IntEnum
 
 @dataclass
 class Vector3:
@@ -52,10 +52,10 @@ class GameState:
 # for more info look at documentation, Map Response
 # all data about game entity locations
 class GameMap:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
+        self.name = None
         self.size = 0
-        self.spawn_points = None
+        self.spawn_points = [] # !!!! IMPORTANT, this is list of json dict (if you need locations of vehicles USE GAMESTATE)
         self.entity_map = dict()
         # ALL entities should go in entity_map
         # entity_map["base"] returns list of base entities
@@ -64,8 +64,12 @@ class GameMap:
         return self.entity_map["base"]
     def get_all_obstacles(self):
         return self.entity_map["obstacle"]
-    def get_all_vehicles(self):
-        return self.entity_map["vehicle"]
+    def get_all_light_repair(self):
+        return self.entity_map["light_repeair"]
+    def get_all_hard_repair(self):
+        return self.entity_map["hard_repair"]
+    def get_all_catapults(self):
+        return self.entity_map["catapult"]
 
 
 
@@ -131,28 +135,40 @@ class Obstacle(GameEntity):
 # Abstract class for action made by player
 # Just holds data about action
 class GameAction(): 
-    def __init__(self, player, action_type):
-        self.player = player
+    def __init__(self, player_id, action_type):
+        self.player_id = player_id
         self.action_type = action_type
     
     # Returns action data as json
-    def get_json():
+    def get_data(self):
         raise NotImplementedError("Child class must override this method")
 
+class GameActionType(IntEnum):
+    CHAT = 100,
+    MOVE = 101,
+    SHOOT = 102
+
 class ChatAction(GameAction):
-    def __init__(self, player, message):
-        super().__init__(player, action_type=None) #todo
+    def __init__(self, player_id, message):
+        super(ChatAction, self).__init__(player_id, GameActionType.CHAT)
         self.message = message
+    def get_data(self):
+        return self.message
 
 
 class MoveAction(GameAction):
-    def __init__(self, player, data):
-        super().__init__(player, action_type=None) #todo
-        #self.direction = direction
+    def __init__(self, player_id, vehicle_id, target):
+        super(MoveAction, self).__init__(player_id, GameActionType.MOVE)
+        self.vehicle_id = vehicle_id
+        self.target = target # location
+    def get_data(self):
+        return {"vehicle_id" : self.vehicle_id, "target" : self.target}
 
 
 class ShootAction(GameAction):
-    def __init__(self, player, data):
-        super().__init__(player, action_type=None) #todo
-        #self.target = target
-
+    def __init__(self, player_id, vehicle_id, target):
+        super(ShootAction, self).__init__(player_id, GameActionType.SHOOT)
+        self.vehicle_id = vehicle_id
+        self.target = target
+    def get_data(self):
+        return {"vehicle_id" : self.vehicle_id, "target" : self.target}

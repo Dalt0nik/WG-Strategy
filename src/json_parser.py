@@ -1,10 +1,10 @@
+from dataclasses import asdict
 import json
 
 from traitlets import Integer
 import wg_game
 
-def PlayerJsonDecoder(json_str, player=None):
-    # TODO
+def PlayerJsonDecoder(json_str):
     data = json.loads(json_str)
     return wg_game.Player(data['idx'], data['name'], data['is_observer'])
 
@@ -69,6 +69,53 @@ def GameStateJsonDecoder(json_str):
     return state
 
 
+def GameMapJsonDecoder(json_str):
+    data = json.loads(json_str)
+    gmap = wg_game.GameMap()
+    gmap.size = data['size']
+    gmap.name = data['name']
+    gmap.entity_map = dict()
 
+    content = data['content']
+    for key in content.keys():
+        gmap.entity_map[key] = []
+        for location in content[key]:
+            gmap.entity_map[key].append(parse_dict_vector3(location))
+    for spawn_point_dict in data['spawn_points']:
+        gmap.spawn_points.append(spawn_point_dict)
 
+    return gmap
     
+def parse_dict_game_action(dct):
+    action_type = dct['action_type']
+    player_id = dct['player_id']
+
+    action_enum = wg_game.GameActionType(action_type)
+    match action_enum:
+        case wg_game.GameActionType.CHAT:
+            action = wg_game.ChatAction(player_id, dct['data']['message'])
+        case wg_game.GameActionType.MOVE:
+            action = wg_game.MoveAction(player_id, dct['data']['vehicle_id'], parse_dict_vector3(dct['data']['target']))
+        case wg_game.GameActionType.SHOOT:
+            action = wg_game.ShootAction(player_id, dct['data']['vehicle_id'], parse_dict_vector3(dct['data']['target']))
+
+    return action
+
+def GameTurnsJsonDecoder(json_str):
+    data = json.loads(json_str)
+    turns = []
+    for turn in data['actions']:
+        turns.append(parse_dict_game_action(turn))
+    return turns
+
+def ActionEncodeJson(action):
+    data = dict()
+    if action.action_type == wg_game.GameActionType.CHAT:
+        data['message'] = action.get_data()
+    else:
+        data['vehicle_id'] = action.get_data()['vehicle_id']
+        position = dict(asdict(action.get_data()['target']))
+        data['target'] = position
+        
+    return json.dumps(data)
+
