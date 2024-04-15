@@ -1,7 +1,8 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 @dataclass
-class Location:
+class Vector3:
     x: int
     y: int
     z: int
@@ -14,6 +15,8 @@ class Game:
     def __init__(self, name):
         self.name = name
         self.state = GameState()
+        self.map = GameMap()
+        self.controller = AIController()
 
     def start(self):
         pass
@@ -31,20 +34,17 @@ class GameState:
         self.num_rounds = 0
         self.current_turn = 0
         self.current_round = 0
-        players = []
-        
-        # Our player, we can keep more data about them
-        client = None
+        self.players = []
 
         self.observers = []
         self.current_player_idx = 0
         self.finished = False
-        vehicles = []
-        attack_matrix = None
-        winner = 0
-        win_points = None
-        player_result_points = None
-        catapult_usage = None
+        self.vehicles = []
+        self.attack_matrix = None
+        self.winner = 0
+        self.win_points = WinPoints()
+        self.player_result_points = dict()
+        self.catapult_usage = []
 
 
 # game map
@@ -55,28 +55,30 @@ class GameMap:
         self.name = name
         self.size = 0
         self.spawn_points = None
-        content = None
+        self.content = None
 
-# Player (client)
-# init only client, game state keeps track of other players
-# can make GameActions
+# Player (client and others)
+# Init Client with Controller
+# Init others without
 class Player:
-    def __init__(self, name):
+    def __init__(self, idx, name, is_observer):
         self.name = name
-        self.id = -1
+        self.id = idx
+        self.is_observer = is_observer
+
+
+# tells networking system what to send
+class Controller:
+    def __init__(self):
+        ...
     
-    def make_action(action):
-        # tell game to make action, game tells networking subsystem to pass action
+    def make_action(self, action):
         ...
 
-# able to pass data to player
-class ControllerInterface:
-    def __init__(self):
-        pass
 
-# Reads Console Input, should pass data to player
+# Reads Console Input
 # ONLY OPTIONAL, We don't need to do it now
-class ConsoleController(ControllerInterface):
+class ConsoleController(Controller):
     def __init__(self):
         pass
 
@@ -84,27 +86,32 @@ class ConsoleController(ControllerInterface):
         pass
 
 # Uses AI Behavior Algorithms to pass data to player
-class AIController(ControllerInterface):
+class AIController(Controller):
     def __init__(self):
-        pass
+        super.__init__(self)
 
     def make_decision(self):
         pass
 
 # Hexagon entities
 class GameEntity:
-    def __init__(self, location):
-        self.location = location # x,y,z
+    def __init__(self, position):
+        self.position = position # x,y,z
         # add more here?
 
 # Base class for all vehicles OR all vehicles if there is no need to make more classes
 class Vehicle(GameEntity):
     def __init__(self):
-        ...
-        pass
+        self.player_id = 0
+        self.vehicle_type = None # enum
+        self.health = 1
+        self.spawn_position = Vector3(-1,-1,-1)
+        super().position = Vector3(-1,-1,-1)
+        self.capture_points = 0
+        self.shoot_range_bonus = 0
 
 # Abstract class for action made by player
-# Just holds data about action made
+# Just holds data about action
 class GameAction(): 
     def __init__(self, player, action_type):
         self.player = player
@@ -112,7 +119,7 @@ class GameAction():
     
     # Returns action data as json
     def get_json():
-        ...
+        raise NotImplementedError("Child class must override this method")
 
 class ChatAction(GameAction):
     def __init__(self, player, message):
@@ -132,3 +139,22 @@ class ShootAction(GameAction):
         #self.target = target
 
 
+class AttackMatrixData:
+    def __init__(self):
+        self.player_id = -1
+        self.players_attacked = [] # todo change this
+
+class WinPoints:
+    def __init__(self):
+        self.points = dict()
+        # points is dict with player ids as keys, values are tuples (capture points, kill points)
+    
+    # Returns sum of player points
+    def get_player_points(self, player_id):
+        return sum(self.points[id])
+    
+    def get_player_capture_points(self, player_id):
+        return self.points[id][0]
+    
+    def get_player_kill_points(self, player_id):
+        return self.points[id][1]
