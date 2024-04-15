@@ -55,11 +55,20 @@ class GameMap:
         self.name = name
         self.size = 0
         self.spawn_points = None
-        self.content = None
+        self.entity_map = dict()
+        # ALL entities should go in entity_map
+        # entity_map["base"] returns list of base entities
+    
+    def get_all_base(self):
+        return self.entity_map["base"]
+    def get_all_obstacles(self):
+        return self.entity_map["obstacle"]
+    def get_all_vehicles(self):
+        return self.entity_map["vehicle"]
+
+
 
 # Player (client and others)
-# Init Client with Controller
-# Init others without
 class Player:
     def __init__(self, idx, name, is_observer):
         self.name = name
@@ -109,6 +118,14 @@ class Vehicle(GameEntity):
         super().position = Vector3(-1,-1,-1)
         self.capture_points = 0
         self.shoot_range_bonus = 0
+
+class Base(GameEntity):
+    def __init__(self, position):
+        super().__init__(position)
+        ...
+class Obstacle(GameEntity):
+    def __init__(self, position):
+        super().__init__(position)
 
 # Abstract class for action made by player
 # Just holds data about action
