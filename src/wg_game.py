@@ -39,12 +39,13 @@ class GameState:
         self.observers = []
         self.current_player_idx = 0
         self.finished = False
-        self.vehicles = []
-        self.attack_matrix = None
-        self.winner = 0
-        self.win_points = WinPoints()
+        self.vehicles = dict()
+        self.attack_matrix = dict()
+        self.winner = None
+        self.win_points = dict() # Key is player ind, value is tuple (capture, kill points)
         self.player_result_points = dict()
         self.catapult_usage = []
+        
 
 
 # game map
@@ -72,7 +73,7 @@ class GameMap:
 class Player:
     def __init__(self, idx, name, is_observer):
         self.name = name
-        self.id = idx
+        self.idx = idx
         self.is_observer = is_observer
 
 
@@ -115,7 +116,7 @@ class Vehicle(GameEntity):
         self.vehicle_type = None # enum
         self.health = 1
         self.spawn_position = Vector3(-1,-1,-1)
-        super().position = Vector3(-1,-1,-1)
+        super(Vehicle, self).__init__(Vector3(-1,-1,-1))
         self.capture_points = 0
         self.shoot_range_bonus = 0
 
@@ -155,23 +156,3 @@ class ShootAction(GameAction):
         super().__init__(player, action_type=None) #todo
         #self.target = target
 
-
-class AttackMatrixData:
-    def __init__(self):
-        self.player_id = -1
-        self.players_attacked = [] # todo change this
-
-class WinPoints:
-    def __init__(self):
-        self.points = dict()
-        # points is dict with player ids as keys, values are tuples (capture points, kill points)
-    
-    # Returns sum of player points
-    def get_player_points(self, player_id):
-        return sum(self.points[id])
-    
-    def get_player_capture_points(self, player_id):
-        return self.points[id][0]
-    
-    def get_player_kill_points(self, player_id):
-        return self.points[id][1]
