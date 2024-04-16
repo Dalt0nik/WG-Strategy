@@ -16,13 +16,36 @@ class Game:
         self.name = name
         self.state = GameState()
         self.map = GameMap()
-        self.controller = AIController()
+        self.controller = AIController(self)
+        self.stop = False
+        #init network component
 
-    def start(self):
-        pass
+    # I think it's only called once
+    def init_map(self):
+        ...
 
-    def stop(self):
-        pass
+    def game_loop(self):
+        while not self.stop:
+            self.update_game_state()
+            # maybe get game turns
+
+            if self.is_clients_turn():
+                action = self.controller.get_game_action()
+                self.make_action(action)
+            ...
+
+            # maybe end turn here
+    
+    def update_game_state(self):
+        ...
+    def is_clients_turn(self):
+        ...
+    def make_action(self, action):
+        ...
+    def login(self, player_data):
+        ...
+    def logout(self):
+        ...
 
 # game state
 # for more info look at documentation, GameState Response
@@ -40,13 +63,11 @@ class GameState:
         self.current_player_idx = 0
         self.finished = False
         self.vehicles = dict()
-        self.attack_matrix = dict()
+        self.attack_matrix = dict() # key is player, value is list of player ids
         self.winner = None
         self.win_points = dict() # Key is player ind, value is tuple (capture, kill points)
         self.player_result_points = dict()
         self.catapult_usage = []
-        
-
 
 # game map
 # for more info look at documentation, Map Response
@@ -58,7 +79,7 @@ class GameMap:
         self.spawn_points = [] # !!!! IMPORTANT, this is list of json dict (if you need locations of vehicles USE GAMESTATE)
         self.entity_map = dict()
         # ALL entities should go in entity_map
-        # entity_map["base"] returns list of base entities
+        # entity_map["base"] returns list of locations of bases
     
     def get_all_base(self):
         return self.entity_map["base"]
@@ -71,8 +92,6 @@ class GameMap:
     def get_all_catapults(self):
         return self.entity_map["catapult"]
 
-
-
 # Player (client and others)
 class Player:
     def __init__(self, idx, name, is_observer):
@@ -83,54 +102,44 @@ class Player:
 
 # tells networking system what to send
 class Controller:
-    def __init__(self):
-        ...
+    def __init__(self, game):
+        self.game = game
     
-    def make_action(self, action):
-        ...
+    # return GameAction
+    def get_game_action(self):
+        raise NotImplementedError("Child class must override this method")
 
 
 # Reads Console Input
 # ONLY OPTIONAL, We don't need to do it now
 class ConsoleController(Controller):
-    def __init__(self):
-        pass
+    def __init__(self, game):
+        super(ConsoleController, self).__init__(game)
 
     def get_input(self):
         pass
 
 # Uses AI Behavior Algorithms to pass data to player
 class AIController(Controller):
-    def __init__(self):
-        super.__init__(self)
+    def __init__(self, game):
+        super(AIController, self).__init__(game)
 
     def make_decision(self):
         pass
 
-# Hexagon entities
-class GameEntity:
-    def __init__(self, position):
-        self.position = position # x,y,z
-        # add more here?
+    def get_game_action(self):
+        ...
 
 # Base class for all vehicles OR all vehicles if there is no need to make more classes
-class Vehicle(GameEntity):
+class Vehicle:
     def __init__(self):
         self.player_id = 0
-        self.vehicle_type = None # enum
+        self.vehicle_type = None # enum or string
         self.health = 1
         self.spawn_position = Vector3(-1,-1,-1)
-        super(Vehicle, self).__init__(Vector3(-1,-1,-1))
+        self.position = Vector3(-1,-1,-1)
         self.capture_points = 0
         self.shoot_range_bonus = 0
-
-class Base(GameEntity):
-    def __init__(self, position):
-        super().__init__(position)
-        ...
-class Obstacle(GameEntity):
-    def __init__(self, position):
-        super().__init__(position)
 
 # Abstract class for action made by player
 # Just holds data about action
