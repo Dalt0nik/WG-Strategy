@@ -12,6 +12,7 @@ import socket
 import json
 import json_parser
 import heapq
+import connection
 from urllib.parse import urlparse
 
 # Distance between two hexes
@@ -73,15 +74,15 @@ def find_path(start, goal, max_iterations=100):
                     # Calculate distance to the current goal and update closest goal if needed
     return shortest_path
     
-def get_server_ip(http_link):
-    # Parse the URL to extract the hostname
-    parsed_url = urlparse(http_link)
-    hostname = parsed_url.hostname
+# def get_server_ip(http_link):
+#     # Parse the URL to extract the hostname
+#     parsed_url = urlparse(http_link)
+#     hostname = parsed_url.hostname
     
-    # Resolve the hostname to an IP address
-    ip_address = socket.gethostbyname(hostname)
+#     # Resolve the hostname to an IP address
+#     ip_address = socket.gethostbyname(hostname)
     
-    return ip_address
+#     return ip_address
 
 # Creates a move request
 def create_move_request(vehicle_move):
@@ -95,7 +96,7 @@ def create_move_request(vehicle_move):
     combined_move = move_request + message_len_in_byte_format + encoded_message
     return combined_move
 
-login_request = b'\x01\x00\x00\x00\x10\x00\x00\x00{"name": "Bear"}'
+login_request = b'\x01\x00\x00\x00\x10\x00\x00\x00{"name": "Maus"}'
 logout_request = b'\x02\x00\x00\x00\x00\x00\x00\x00'
 map_request = b'\x03\x00\x00\x00\x00\x00\x00\x00'
 game_state_request = b'\x04\x00\x00\x00\x00\x00\x00\x00'
@@ -104,12 +105,6 @@ turn_request = b'\x06\x00\x00\x00\x00\x00\x00\x00'
 
 move_request = b'\x65\x00\x00\x00'
 
-server_website  = 'http://wgforge-srv.wargaming.net'
-server_port = 443  # Change this to your server's port number
-server_address = get_server_ip(server_website)
-
-# Create a socket object
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 def data_to_json(data):
     json_string = data.decode('utf-8', 'ignore')
@@ -117,81 +112,66 @@ def data_to_json(data):
     json_data_str = json_string[start_index:]
     return json_data_str
 
-try:
-    # Connect to the server
-    client_socket.connect((server_address, server_port))
-    print("Connected to server")
 
-    client_socket.sendall(login_request)
-    data = client_socket.recv(2048)
-    
-    #Game Map Data
-    client_socket.sendall(map_request)
-    data = client_socket.recv(2048)
-    json_data_str = data_to_json(data)
-    game_map = json_parser.GameMapJsonDecoder(json_data_str)
+server = connection.ServerConnection('http://wgforge-srv.wargaming.net', 443)
+server.connect()
 
-    #Game State Data
-    client_socket.sendall(game_state_request)
-    data = client_socket.recv(2048)
-    json_data_str = data_to_json(data)
-    game_state = json_parser.GameStateJsonDecoder(json_data_str)
+data = server.send_request(login_request)
+
+#Game Map Data
+data = server.send_request(map_request)
+json_data_str = data_to_json(data)
+game_map = json_parser.GameMapJsonDecoder(json_data_str)
+
+#Game State Data
+data = server.send_request(game_state_request)
+json_data_str = data_to_json(data)
+game_state = json_parser.GameStateJsonDecoder(json_data_str)
 
 
-    position_tuple = (game_state.vehicles[1].position.x, game_state.vehicles[1].position.y)
-    print(position_tuple)
-    base_tuple = (game_map.get_all_base()[0].x, game_map.get_all_base()[0].y)
+position_tuple = (game_state.vehicles[1].position.x, game_state.vehicles[1].position.y)
+print(position_tuple)
+base_tuple = (game_map.get_all_base()[0].x, game_map.get_all_base()[0].y)
 
-    position_to_go = find_path(position_tuple, base_tuple)[1]
+position_to_go = find_path(position_tuple, base_tuple)[1]
 
-    # Coordinates
-    x = position_to_go[0]
-    y = position_to_go[1]
-    z = -(x+y)
+# Coordinates
+x = position_to_go[0]
+y = position_to_go[1]
+z = -(x+y)
 
-    move_json = {
-        "vehicle_id": 1,
-        "target": {
-            "x": x,
-            "y": y,
-            "z": z
-        }
+move_json = {
+    "vehicle_id": 1,
+    "target": {
+        "x": x,
+        "y": y,
+        "z": z
     }
-    # Convert dictionary to JSON string
-    json_string = json.dumps(move_json)
-    vehicle_move = json_string
+}
+# Convert dictionary to JSON string
+json_string = json.dumps(move_json)
+vehicle_move = json_string
 
-    combined_move_request = create_move_request(vehicle_move)
+combined_move_request = create_move_request(vehicle_move)
 
-    #Send move request
-    client_socket.sendall(combined_move_request)
-    data = client_socket.recv(2048)
+#Send move request
+data = server.send_request(combined_move_request)
 
-    
-    #Making next turn
-    client_socket.sendall(turn_request)
-    data = client_socket.recv(2048)
 
-    #Game State Data
-    client_socket.sendall(game_state_request)
-    data = client_socket.recv(2048)
-    json_data_str = data_to_json(data)
-    game_state = json_parser.GameStateJsonDecoder(json_data_str)
+#Making next turn
+data = server.send_request(turn_request)
 
-    # Positions of vehicles
-    for vehicle_index in game_state.vehicles:
-        print(game_state.vehicles[vehicle_index].position)
+#Game State Data
+data = server.send_request(game_state_request)
+json_data_str = data_to_json(data)
+game_state = json_parser.GameStateJsonDecoder(json_data_str)
+
+# Positions of vehicles
+for vehicle_index in game_state.vehicles:
+    print(game_state.vehicles[vehicle_index].position)
 
     
-    
-except ConnectionRefusedError:
-    print("Connection refused. Make sure the server is running and reachable.")
-#except Exception as e:
-#    print("An error occurred:", e)
 
-finally:
-    # Close the socket
-    client_socket.close()
 
 
 
