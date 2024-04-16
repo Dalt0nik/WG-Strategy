@@ -21,7 +21,7 @@ def hex_distance(a, b):
 
 # 0.1v pathfinding. One goal, no check for vehicles as obstacles. Star and goal are tuples.
 # Given goal, returns the shortest path
-def find_path(start, goal, max_iterations=100):
+def find_path(start, goal, game_state, max_iterations=100):
     directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1),
             (2, -1), (1, -2), (-1, -1), (-2, 0), (-1, 2), (1, 1),
             (2, 0), (2, -2), (0, -2), (-2, 1), (-2, 2), (0, 2)]
@@ -61,9 +61,9 @@ def find_path(start, goal, max_iterations=100):
                 
                 continue  # Skip if neighbor is an obstacle or already visited
             # Skip if neighbor is occupied by another vehicle
-            occupied = False
-            if occupied:
+            if taken(neighbor, game_state):
                 continue
+
             tentative_g_cost = g_costs[current] + 1 
             if neighbor not in g_costs or tentative_g_cost < g_costs[neighbor]:
                 g_costs[neighbor] = tentative_g_cost
@@ -73,16 +73,15 @@ def find_path(start, goal, max_iterations=100):
         iterations += 1
                     # Calculate distance to the current goal and update closest goal if needed
     return shortest_path
+
+
     
-# def get_server_ip(http_link):
-#     # Parse the URL to extract the hostname
-#     parsed_url = urlparse(http_link)
-#     hostname = parsed_url.hostname
-    
-#     # Resolve the hostname to an IP address
-#     ip_address = socket.gethostbyname(hostname)
-    
-#     return ip_address
+# Checks if the hex is taken by another vehicle
+def taken(hex, game_state):
+    for vehicle in game_state.vehicles:
+        if game_state.vehicles[vehicle].position.x == hex[0] and game_state.vehicles[vehicle].position.y == hex[1]:
+            return True
+    return False
 
 # Creates a move request
 def create_move_request(vehicle_move):
@@ -96,7 +95,7 @@ def create_move_request(vehicle_move):
     combined_move = move_request + message_len_in_byte_format + encoded_message
     return combined_move
 
-login_request = b'\x01\x00\x00\x00\x10\x00\x00\x00{"name": "Maus"}'
+login_request = b'\x01\x00\x00\x00\x10\x00\x00\x00{"name": "Lion"}'
 logout_request = b'\x02\x00\x00\x00\x00\x00\x00\x00'
 map_request = b'\x03\x00\x00\x00\x00\x00\x00\x00'
 game_state_request = b'\x04\x00\x00\x00\x00\x00\x00\x00'
@@ -133,7 +132,7 @@ position_tuple = (game_state.vehicles[1].position.x, game_state.vehicles[1].posi
 print(position_tuple)
 base_tuple = (game_map.get_all_base()[0].x, game_map.get_all_base()[0].y)
 
-position_to_go = find_path(position_tuple, base_tuple)[1]
+position_to_go = find_path(position_tuple, base_tuple, game_state)[1]
 
 # Coordinates
 x = position_to_go[0]
@@ -170,6 +169,11 @@ game_state = json_parser.GameStateJsonDecoder(json_data_str)
 for vehicle_index in game_state.vehicles:
     print(game_state.vehicles[vehicle_index].position)
 
+# Logout
+data = server.send_request(logout_request)
+print("Logged out")
+
+server.close()
     
 
 

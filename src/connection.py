@@ -43,4 +43,5 @@ class ServerConnection:
     def close(self):
         # Close the socket
         self.client_socket.close()
+        print("Connection closed")
 
