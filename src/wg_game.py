@@ -30,7 +30,7 @@ class Game:
 class GameState:
     def __init__(self):
         self.num_players = 0
-        self.num_turns = 0;
+        self.num_turns = 0
         self.num_rounds = 0
         self.current_turn = 0
         self.current_round = 0

@@ -64,7 +64,7 @@ def GameStateJsonDecoder(json_str):
             atk_list.append(int(idx))
         state.attack_matrix[int(key)] = atk_list
 
-    for keys in data['vehicles'].keys():
+    for key in data['vehicles'].keys():
         state.vehicles[int(key)] = parse_dict_vehicle(data['vehicles'][key])
     return state
 
