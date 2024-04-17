@@ -162,7 +162,7 @@ class Game:
                 for vehicle_id, vehicle in self.state.vehicles.items():
                     action = self.controller.get_game_action(vehicle_id, vehicle)
                     self.make_action(action)
-                    print("action: ")
+                    print("moving vehicle", vehicle_id, vehicle.position, " to", action.target)
                 self.skip_turn()
 
             # maybe end turn here
@@ -302,9 +302,14 @@ class AIController(Controller):
     def get_game_action(self, id, vehicle): # no smart decisions for now
         position = (vehicle.position.x, vehicle.position.y) #questionable?
         base_position = (self.game.map.get_all_base()[0].x, self.game.map.get_all_base()[0].y)
+        #base_position = (0, 0)
         path = find_path(position, base_position, self.game.state)
-    
-        target = path[1] if len(path) > 2 else None # > 2 so they would make a circle around the base
+
+        if path.__len__() < 2:
+            target = position
+        else:
+            target = path[1]
+
         target_good = Vector3(target[0], target[1], -1*(target[0] + target[1]))
         return MoveAction(vehicle.player_id, id, target_good)
 
