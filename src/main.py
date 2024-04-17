@@ -117,7 +117,7 @@ from urllib.parse import urlparse
 
 game = wg_game.Game("Tank")
 
-# game.game_loop()
+game.game_loop()
     
 
 

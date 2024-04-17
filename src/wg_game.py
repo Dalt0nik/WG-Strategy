@@ -75,7 +75,7 @@ def find_path(start, goal, game_state, max_iterations=100):
                 
                 continue  # Skip if neighbor is an obstacle or already visited
             # Skip if neighbor is occupied by another vehicle
-            if taken(neighbor, game_state):
+            if taken(neighbor, game_state) and neighbor != goal:
                 continue
 
             tentative_g_cost = g_costs[current] + 1 
@@ -119,10 +119,10 @@ class Game:
     
 
     def game_loop(self):
+        self.server.connect()
         self.login()
-
+        self.init_map()
         self.update_game_state()
-        self.initialize_vehicles()
 
         while not self.stop:
             sleep(0.1) # I guess some sleep?
@@ -132,6 +132,11 @@ class Game:
             if self.state.finished:
                 self.stop = True
                 self.logout()
+                print("Game finished")
+                print("Winner:", self.state.winner)
+                print("Win points:", self.state.win_points)
+                                
+                self.print_vehicle_positions()
                 break
 
             self.print_vehicle_positions()
@@ -139,32 +144,29 @@ class Game:
 
             if self.is_clients_turn():
                 
-                # Check if all vehicles are in their final position
-                all_in_place = all(abs(vehicle.position.x) < 2 and abs(vehicle.position.y) < 2 and abs(vehicle.position.z) < 2 for vehicle in self.vehicles)
+                # removed block debug 5
+                # # Check if all vehicles are in their final position
+                # all_in_place = all(abs(vehicle.position.x) < 2 and abs(vehicle.position.y) < 2 and abs(vehicle.position.z) < 2 for vehicle in self.vehicles)
 
-                # Skip loop iteration if all vehicles are in place
-                if all_in_place:
-                    self.skip_turn() # should be turned into an action?
-                    continue
+                # # Skip loop iteration if all vehicles are in place
+                # if all_in_place:
+                #     self.skip_turn() # should be turned into an action?
+                #     print("Skipping turn")
+                #     continue
 
-                for vehicle in self.vehicles:
-                    action = self.controller.get_game_action(vehicle)
+                for vehicle_id, vehicle in self.state.vehicles.items():
+                    action = self.controller.get_game_action(vehicle_id, vehicle)
                     self.make_action(action)
 
             # maybe end turn here
 
     def print_vehicle_positions(self):
-        for vehicle in self.vehicles:
-            print(vehicle.position)
+        for vehicle_index in self.state.vehicles:
+            print(self.state.vehicles[vehicle_index].position)
+        print("\n")
 
     def skip_turn(self):
         data = self.server.send_request(turn_request)
-
-    def initialize_vehicles(self):
-        for vehicle_id in self.state.vehicles:
-            if self.state.vehicles[vehicle_id].player_id == self.idx:
-                self.vehicles.append(json_parser.parse_dict_vehicle(self.state.vehicles[vehicle_id]))
-
 
     
     def update_game_state(self):
@@ -186,6 +188,7 @@ class Game:
         json_data_str = data_to_json(data)
         response = json_parser.LoginJsonDecoder(json_data_str)
         self.idx = response.player_id
+        print("Logged in as player with id:", self.idx)
 
 
     def logout(self):
@@ -279,14 +282,14 @@ class AIController(Controller):
     def make_decision(self):
         pass
 
-    def get_game_action(self, vehicle): # no smart decisions for now lol
-        position = (vehicle.position.x, vehicle.position.y)
+    def get_game_action(self, id, vehicle): # no smart decisions for now
+        position = (vehicle.position.x, vehicle.position.y) #questionable?
         base_position = (self.game.map.get_all_base()[0].x, self.game.map.get_all_base()[0].y)
         path = find_path(position, base_position, self.game.state)
 
         target = path[1] if len(path) > 2 else None # > 2 so they would make a circle around the base
 
-        return MoveAction(vehicle.player_id, vehicle.vehicle_id, target)
+        return MoveAction(vehicle.player_id, id, target)
 
 # Base class for all vehicles OR all vehicles if there is no need to make more classes
 class Vehicle:
