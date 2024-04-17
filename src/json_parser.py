@@ -108,6 +108,10 @@ def GameTurnsJsonDecoder(json_str):
         turns.append(parse_dict_game_action(turn))
     return turns
 
+def LoginJsonDecoder(json_str):
+    data = json.loads(json_str)
+    return wg_game.LoginResponse(data['idx'], data['name'], data['is_observer'])
+
 def ActionEncodeJson(action):
     data = dict()
     if action.action_type == wg_game.GameActionType.CHAT:

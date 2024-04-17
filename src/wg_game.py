@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum, IntEnum
+from time import sleep
+import heapq
+import connection
+import json_parser
 
 @dataclass
 class Vector3:
@@ -10,42 +14,190 @@ class Vector3:
 # example
 # location = Location(x, y, z)
 
+
+# Requests
+login_request = b'\x01\x00\x00\x00\x10\x00\x00\x00{"name": "Tank"}'
+logout_request = b'\x02\x00\x00\x00\x00\x00\x00\x00'
+map_request = b'\x03\x00\x00\x00\x00\x00\x00\x00'
+game_state_request = b'\x04\x00\x00\x00\x00\x00\x00\x00'
+game_actions_request = b'\x05\x00\x00\x00\x00\x00\x00\x00'
+turn_request = b'\x06\x00\x00\x00\x00\x00\x00\x00'
+
+def data_to_json(data):
+    json_string = data.decode('utf-8', 'ignore')
+    start_index = json_string.find('{')
+    json_data_str = json_string[start_index:]
+    return json_data_str
+
+
+def hex_distance(a, b):
+    return (abs(a[0] - b[0]) + abs(a[0] + a[1] - b[0] - b[1]) + abs(a[1] - b[1])) // 2
+
+# 0.1v pathfinding. One goal, no check for vehicles as obstacles. Star and goal are tuples.
+# Given goal, returns the shortest path
+def find_path(start, goal, game_state, max_iterations=100):
+    directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1),
+            (2, -1), (1, -2), (-1, -1), (-2, 0), (-1, 2), (1, 1),
+            (2, 0), (2, -2), (0, -2), (-2, 1), (-2, 2), (0, 2)]
+    open_list = []
+    closed_set = set()
+    g_costs = {}
+    parents = {}
+    shortest_path_length = float('inf')
+    shortest_path = None
+
+    # Initialize start node
+    g_costs[start] = 0
+    f_cost = hex_distance(start, goal)
+    heapq.heappush(open_list, (f_cost, start))
+
+    iterations = 0
+    while open_list and iterations < max_iterations:
+        _, current = heapq.heappop(open_list)
+
+        if current == goal:
+            # Reconstruct the path
+            path = [current]
+            while current in parents:
+                current = parents[current]
+                path.append(current)
+            path.reverse()
+            if len(path) < shortest_path_length:
+                shortest_path_length = len(path)
+                shortest_path = path
+
+        closed_set.add(current)
+
+        for direction in directions:
+            neighbor = (current[0] + direction[0] , current[1] + direction[1] )
+            if neighbor in closed_set:
+                
+                
+                continue  # Skip if neighbor is an obstacle or already visited
+            # Skip if neighbor is occupied by another vehicle
+            if taken(neighbor, game_state):
+                continue
+
+            tentative_g_cost = g_costs[current] + 1 
+            if neighbor not in g_costs or tentative_g_cost < g_costs[neighbor]:
+                g_costs[neighbor] = tentative_g_cost
+                f_cost = tentative_g_cost + hex_distance(neighbor, goal)
+                heapq.heappush(open_list, (f_cost, neighbor))
+                parents[neighbor] = current
+        iterations += 1
+                    # Calculate distance to the current goal and update closest goal if needed
+    return shortest_path
+
+
+    
+# Checks if the hex is taken by another vehicle
+def taken(hex, game_state):
+    for vehicle in game_state.vehicles:
+        if game_state.vehicles[vehicle].position.x == hex[0] and game_state.vehicles[vehicle].position.y == hex[1]:
+            return True
+    return False
+
 # instance of game being played
 class Game:
     def __init__(self, name):
         self.name = name
+        self.idx = 0
+        self.vehicles = []
         self.state = GameState()
         self.map = GameMap()
         self.controller = AIController(self)
         self.stop = False
+        self.server = connection.ServerConnection('http://wgforge-srv.wargaming.net', 443)
         #init network component
 
     # I think it's only called once
     def init_map(self):
-        ...
+        data = self.server.send_request(map_request)
+        json_data_str = data_to_json(data)
+        self.map = json_parser.GameMapJsonDecoder(json_data_str)
+
+    
 
     def game_loop(self):
+        self.login()
+
+        self.update_game_state()
+        self.initialize_vehicles()
+
         while not self.stop:
+            sleep(0.1) # I guess some sleep?
+
             self.update_game_state()
+
+            if self.state.finished:
+                self.stop = True
+                self.logout()
+                break
+
+            self.print_vehicle_positions()
             # maybe get game turns
 
             if self.is_clients_turn():
-                action = self.controller.get_game_action()
-                self.make_action(action)
-            ...
+                
+                # Check if all vehicles are in their final position
+                all_in_place = all(abs(vehicle.position.x) < 2 and abs(vehicle.position.y) < 2 and abs(vehicle.position.z) < 2 for vehicle in self.vehicles)
+
+                # Skip loop iteration if all vehicles are in place
+                if all_in_place:
+                    self.skip_turn() # should be turned into an action?
+                    continue
+
+                for vehicle in self.vehicles:
+                    action = self.controller.get_game_action(vehicle)
+                    self.make_action(action)
 
             # maybe end turn here
+
+    def print_vehicle_positions(self):
+        for vehicle in self.vehicles:
+            print(vehicle.position)
+
+    def skip_turn(self):
+        data = self.server.send_request(turn_request)
+
+    def initialize_vehicles(self):
+        for vehicle_id in self.state.vehicles:
+            if self.state.vehicles[vehicle_id].player_id == self.idx:
+                self.vehicles.append(json_parser.parse_dict_vehicle(self.state.vehicles[vehicle_id]))
+
+
     
     def update_game_state(self):
-        ...
+        data = self.server.send_request(game_state_request)
+        json_data_str = data_to_json(data)
+        self.state = json_parser.GameStateJsonDecoder(json_data_str)
+
     def is_clients_turn(self):
-        ...
+        return self.state.current_player_idx == self.idx
+
     def make_action(self, action):
-        ...
-    def login(self, player_data):
-        ...
+        if(action.target is not None):
+            move_action = MoveAction(self.idx, action.vehicle_id, action.target) # temporary solution with action being only move
+            data = json_parser.ActionEncodeJson(move_action)
+            self.server.send_request(data) # send move action
+
+    def login(self): #remove name for now
+        data = self.server.send_request(login_request)
+        json_data_str = data_to_json(data)
+        response = json_parser.LoginJsonDecoder(json_data_str)
+        self.idx = response.player_id
+
+
     def logout(self):
-        ...
+        data = self.server.send_request(logout_request)
+
+
+# Login response
+class LoginResponse:
+    def __init__(self, player_id, name, is_observer):
+        self.player_id = player_id
+        self.name = name
+        self.is_observer = is_observer
 
 # game state
 # for more info look at documentation, GameState Response
@@ -106,7 +258,7 @@ class Controller:
         self.game = game
     
     # return GameAction
-    def get_game_action(self):
+    def get_game_action(self, vehicle):
         raise NotImplementedError("Child class must override this method")
 
 
@@ -127,8 +279,14 @@ class AIController(Controller):
     def make_decision(self):
         pass
 
-    def get_game_action(self):
-        ...
+    def get_game_action(self, vehicle): # no smart decisions for now lol
+        position = (vehicle.position.x, vehicle.position.y)
+        base_position = (self.game.map.get_all_base()[0].x, self.game.map.get_all_base()[0].y)
+        path = find_path(position, base_position, self.game.state)
+
+        target = path[1] if len(path) > 2 else None # > 2 so they would make a circle around the base
+
+        return MoveAction(vehicle.player_id, vehicle.vehicle_id, target)
 
 # Base class for all vehicles OR all vehicles if there is no need to make more classes
 class Vehicle:
