@@ -34,7 +34,7 @@ class ServerConnection:
         try:
             # Send the request
             self.client_socket.sendall(request)
-            data = self.client_socket.recv(2048)
+            data = self.client_socket.recv(1024 * 10)
             return data
         except Exception as e:
             print("An error occurred while sending the request:", e)

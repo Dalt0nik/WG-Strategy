@@ -10,10 +10,16 @@ class Vector3:
     x: int
     y: int
     z: int
-
 # example
 # location = Location(x, y, z)
 
+class Result(IntEnum):
+    OKEY = 0,
+    BAD_COMMAND = 1,
+    ACCESS_DENIED = 2,
+    INAPPROPRIATE_GAME_STATE = 3,
+    TIMEOUT = 4,
+    INTERNAL_SERVER_ERROR = 500
 
 # Requests
 login_request = b'\x01\x00\x00\x00\x10\x00\x00\x00{"name": "Tank"}'
@@ -113,10 +119,9 @@ class Game:
     # I think it's only called once
     def init_map(self):
         data = self.server.send_request(map_request)
+        assert(self.response_result(data) == Result.OKEY)
         json_data_str = data_to_json(data)
         self.map = json_parser.GameMapJsonDecoder(json_data_str)
-
-    
 
     def game_loop(self):
         self.server.connect()
@@ -125,7 +130,7 @@ class Game:
         self.update_game_state()
 
         while not self.stop:
-            sleep(0.1) # I guess some sleep?
+            sleep(1) # I guess some sleep?
 
             self.update_game_state()
 
@@ -157,6 +162,8 @@ class Game:
                 for vehicle_id, vehicle in self.state.vehicles.items():
                     action = self.controller.get_game_action(vehicle_id, vehicle)
                     self.make_action(action)
+                    print("action: ")
+                self.skip_turn()
 
             # maybe end turn here
 
@@ -171,6 +178,7 @@ class Game:
     
     def update_game_state(self):
         data = self.server.send_request(game_state_request)
+        assert(self.response_result(data) == Result.OKEY)
         json_data_str = data_to_json(data)
         self.state = json_parser.GameStateJsonDecoder(json_data_str)
 
@@ -180,11 +188,13 @@ class Game:
     def make_action(self, action):
         if(action.target is not None):
             move_action = MoveAction(self.idx, action.vehicle_id, action.target) # temporary solution with action being only move
-            data = json_parser.ActionEncodeJson(move_action)
-            self.server.send_request(data) # send move action
+            json_str = json_parser.ActionEncodeJson(move_action)
+            data = b'\x65\x00\x00\x00' + len(json_str).to_bytes(4, 'little') + json_str.encode('utf-8')
+            res = self.server.send_request(data) # send move action
 
     def login(self): #remove name for now
         data = self.server.send_request(login_request)
+        assert(self.response_result(data) == Result.OKEY)
         json_data_str = data_to_json(data)
         response = json_parser.LoginJsonDecoder(json_data_str)
         self.idx = response.player_id
@@ -193,6 +203,13 @@ class Game:
 
     def logout(self):
         data = self.server.send_request(logout_request)
+        assert(self.response_result(data) == Result.OKEY)
+
+    # get response result
+    def response_result(self, data):
+        result = data[:4]
+        integer_value = int.from_bytes(result, byteorder='little')
+        return Result(integer_value)
 
 
 # Login response
@@ -286,10 +303,10 @@ class AIController(Controller):
         position = (vehicle.position.x, vehicle.position.y) #questionable?
         base_position = (self.game.map.get_all_base()[0].x, self.game.map.get_all_base()[0].y)
         path = find_path(position, base_position, self.game.state)
-
+    
         target = path[1] if len(path) > 2 else None # > 2 so they would make a circle around the base
-
-        return MoveAction(vehicle.player_id, id, target)
+        target_good = Vector3(target[0], target[1], -1*(target[0] + target[1]))
+        return MoveAction(vehicle.player_id, id, target_good)
 
 # Base class for all vehicles OR all vehicles if there is no need to make more classes
 class Vehicle:
