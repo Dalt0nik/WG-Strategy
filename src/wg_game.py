@@ -148,16 +148,6 @@ class Game:
             # maybe get game turns
 
             if self.is_clients_turn():
-                
-                # removed block debug 5
-                # # Check if all vehicles are in their final position
-                # all_in_place = all(abs(vehicle.position.x) < 2 and abs(vehicle.position.y) < 2 and abs(vehicle.position.z) < 2 for vehicle in self.vehicles)
-
-                # # Skip loop iteration if all vehicles are in place
-                # if all_in_place:
-                #     self.skip_turn() # should be turned into an action?
-                #     print("Skipping turn")
-                #     continue
 
                 for vehicle_id, vehicle in self.state.vehicles.items():
                     action = self.controller.get_game_action(vehicle_id, vehicle)
